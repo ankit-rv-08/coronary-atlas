@@ -20,6 +20,11 @@ ROOT = Path(__file__).resolve().parents[3]
 DATA_PATH = ROOT / "data" / "extension of Z-Alizadeh sani dataset.xlsx"
 MODEL_DIR = Path(__file__).resolve().parent / "saved_models"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
+BEST_FEATURES_PATH = MODEL_DIR / "best_features.json"
+BEST_FEATURES = {}
+if BEST_FEATURES_PATH.exists():
+    with BEST_FEATURES_PATH.open() as handle:
+        BEST_FEATURES = json.load(handle)
 
 TARGETS = ["CAD", "LAD", "LCX", "RCA"]
 VESSEL_TARGETS = {"LAD", "LCX", "RCA"}
@@ -88,6 +93,9 @@ def build_feature_matrix(df: pd.DataFrame, target: str) -> tuple[pd.DataFrame, p
         drop_columns |= VESSEL_TARGETS
     drop_columns.add(target)
     feature_columns = [column for column in df.columns if column not in drop_columns]
+    if target in BEST_FEATURES:
+        selected = set(BEST_FEATURES[target])
+        feature_columns = [column for column in feature_columns if column in selected]
     X = pd.get_dummies(df[feature_columns], drop_first=True)
     X = X.replace([np.inf, -np.inf], np.nan)
     return X, y
