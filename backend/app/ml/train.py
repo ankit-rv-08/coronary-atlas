@@ -93,13 +93,22 @@ def build_feature_matrix(df: pd.DataFrame, target: str) -> tuple[pd.DataFrame, p
     return X, y
 
 
-def make_model(scale_pos_weight: float, seed: int) -> XGBClassifier:
+def make_model(
+    scale_pos_weight: float,
+    seed: int,
+    params: dict | None = None,
+) -> XGBClassifier:
+    model_params = {
+        "n_estimators": 300,
+        "max_depth": 4,
+        "learning_rate": 0.05,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+    }
+    if params:
+        model_params.update(params)
     return XGBClassifier(
-        n_estimators=300,
-        max_depth=4,
-        learning_rate=0.05,
-        subsample=0.8,
-        colsample_bytree=0.8,
+        **model_params,
         scale_pos_weight=scale_pos_weight,
         eval_metric="logloss",
         random_state=seed,
@@ -132,16 +141,22 @@ def train_target(df: pd.DataFrame, target: str) -> dict:
         X, y, test_size=0.2, stratify=y, random_state=42
     )
     scale_pos_weight = (y_train == 0).sum() / max((y_train == 1).sum(), 1)
+    best_params_path = MODEL_DIR / "best_params.json"
+    params = {}
+    if best_params_path.exists():
+        with best_params_path.open() as handle:
+            params = json.load(handle).get(target, {}).get("best_params", {})
+        print(f"Using tuned parameters for {target}")
     cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
     cv_aucs = []
     for fold, (train_index, validation_index) in enumerate(cv.split(X_train, y_train), 1):
-        model = make_model(scale_pos_weight, 42 + fold)
+        model = make_model(scale_pos_weight, 42 + fold, params)
         model.fit(X_train.iloc[train_index], y_train.iloc[train_index])
         probabilities = model.predict_proba(X_train.iloc[validation_index])[:, 1]
         cv_aucs.append(roc_auc_score(y_train.iloc[validation_index], probabilities))
         print(f"  Fold {fold} ROC-AUC: {cv_aucs[-1]:.4f}")
 
-    model = make_model(scale_pos_weight, 42)
+    model = make_model(scale_pos_weight, 42, params)
     model.fit(X_train, y_train)
     metrics = evaluate_model(model, X_test, y_test)
     metrics["cv_mean_roc_auc"] = float(np.mean(cv_aucs))
