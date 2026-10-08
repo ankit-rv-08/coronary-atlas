@@ -34,6 +34,17 @@ app.add_middleware(
 )
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": "Coronary Atlas API",
+        "status": "live",
+        "docs": "/docs",
+        "health": "/health",
+        "predict": "POST /predict",
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, Any]:
     return {"status": "ok", "service": "coronary-atlas", "models": get_available_targets()}
